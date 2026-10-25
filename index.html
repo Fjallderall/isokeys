@@ -63,11 +63,10 @@
            -------------------------------------------------------------------------- */
         #keyboard-wrapper {
             display: flex;
+            flex: 1; /* Automatically fills the remaining space below the header */
             align-items: center;
             justify-content: center;
             width: 100vw;
-            /* 80px reserved for header, dvh handles mobile browser chrome dynamically */
-            height: calc(100dvh - 80px); 
             overflow: hidden;
             position: relative;
         }
@@ -173,7 +172,8 @@
     </section>
 
     <!-- 2. HEADER / TOP CONTROLS -->
-    <header id="top-controls" class="h-24 sm:h-20 bg-black border-b border-cyan-900 flex flex-col sm:flex-row items-center justify-between px-2 sm:px-6 z-20 shrink-0 gap-2 sm:gap-0 pt-2 sm:pt-0">
+    <!-- Safe Area Inset added to prevent iOS status bar overlap, dynamic height added -->
+    <header id="top-controls" class="bg-black border-b border-cyan-900 flex flex-col sm:flex-row items-center justify-between px-2 sm:px-6 z-20 shrink-0 gap-2 sm:gap-4 py-3" style="padding-top: max(env(safe-area-inset-top), 0.75rem);">
         <div class="font-bold text-lg sm:text-xl tracking-widest text-cyan-400 hidden lg:block uppercase">
             IsoKeys
         </div>
@@ -234,6 +234,17 @@
                     <option value="0,8,18">Minor Triad</option>
                     <option value="0,10,18,25">Harmonic 7th</option>
                     <option value="0,3,15,28">Dissonant Cluster</option>
+                </select>
+            </div>
+
+            <!-- Key Size Selector -->
+            <div class="flex flex-col">
+                <label for="keysize" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Key Size</label>
+                <select id="keysize" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200">
+                    <option value="48">Small</option>
+                    <option value="64" selected>Medium</option>
+                    <option value="80">Large</option>
+                    <option value="96">X-Large</option>
                 </select>
             </div>
 
@@ -362,6 +373,15 @@
                 renderGrid(); // Redraw whole grid with new math
             });
             document.getElementById('harmony').addEventListener('change', e => currentHarmony = e.target.value.split(',').map(Number));
+            
+            document.getElementById('keysize').addEventListener('change', e => {
+                HEX_W = parseInt(e.target.value, 10);
+                HEX_H = Math.round(HEX_W * 1.1547); // Mathematically perfect pointy-top hex
+                COL_OFFSET = HEX_W;
+                ROW_OFFSET = HEX_H * 0.75;
+                renderGrid();
+                resizeKeyboard();
+            });
         }
 
         function updateVolume(val) {
@@ -689,10 +709,10 @@
            -------------------------------------------------------------------------- */
         
         // Physical Dimensions
-        const HEX_W = 64; 
-        const HEX_H = 74; 
-        const COL_OFFSET = HEX_W;           
-        const ROW_OFFSET = HEX_H * 0.75;    
+        let HEX_W = 64; 
+        let HEX_H = 74; 
+        let COL_OFFSET = HEX_W;           
+        let ROW_OFFSET = HEX_H * 0.75;    
         
         let NUM_COLS = 15;
         let NUM_ROWS = 10;
@@ -783,6 +803,8 @@
                     hexWrapper.dataset.pitchclass = pitchClass;
                     hexWrapper.style.left = `${x}px`;
                     hexWrapper.style.top = `${y}px`;
+                    hexWrapper.style.width = `${HEX_W}px`;
+                    hexWrapper.style.height = `${HEX_H}px`;
 
                     const hexInner = document.createElement('div');
                     hexInner.className = 'hex-inner';
