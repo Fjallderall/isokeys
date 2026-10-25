@@ -123,6 +123,12 @@
         /* --------------------------------------------------------------------------
            4. FULLSCREEN OVERRIDES
            -------------------------------------------------------------------------- */
+        
+        /* Safari-safe padding for the notch/status bar */
+        #top-controls {
+            padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+        }
+
         body.fullscreen-mode #top-controls {
             display: none !important;
         }
@@ -172,8 +178,8 @@
     </section>
 
     <!-- 2. HEADER / TOP CONTROLS -->
-    <!-- Safe Area Inset added to prevent iOS status bar overlap, dynamic height added -->
-    <header id="top-controls" class="bg-black border-b border-cyan-900 flex flex-col sm:flex-row items-center justify-between px-2 sm:px-6 z-20 shrink-0 gap-2 sm:gap-4 py-3" style="padding-top: max(env(safe-area-inset-top), 0.75rem);">
+    <!-- Safe Area Inset added via CSS to prevent iOS status bar overlap -->
+    <header id="top-controls" class="bg-black border-b border-cyan-900 flex flex-col sm:flex-row items-center justify-between px-2 sm:px-6 z-20 shrink-0 gap-2 sm:gap-4 py-3">
         <div class="font-bold text-lg sm:text-xl tracking-widest text-cyan-400 hidden lg:block uppercase">
             IsoKeys
         </div>
@@ -181,9 +187,9 @@
         <nav class="flex items-center gap-2 sm:gap-4 flex-wrap justify-center w-full lg:w-auto">
             
             <!-- EDO Tuning Selector -->
-            <div class="flex flex-col">
+            <div class="flex flex-col min-w-[100px]">
                 <label for="edo-tuning" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Tuning (EDO)</label>
-                <select id="edo-tuning" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200">
+                <select id="edo-tuning" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200 w-full">
                     <option value="12">12-EDO (Standard)</option>
                     <option value="19">19-EDO</option>
                     <option value="24">24-EDO (Quarter)</option>
@@ -194,9 +200,9 @@
             </div>
 
             <!-- Tone Suite Selector -->
-            <div class="flex flex-col">
+            <div class="flex flex-col min-w-[100px]">
                 <label for="waveform" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Tone Suite</label>
-                <select id="waveform" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200">
+                <select id="waveform" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200 w-full">
                     <option value="sine">Sine Piano</option>
                     <option value="epiano">Electric Piano</option>
                     <option value="fokker">Fokker Organ</option>
@@ -211,9 +217,9 @@
             </div>
 
             <!-- Color Scheme Selector -->
-            <div class="flex flex-col">
+            <div class="flex flex-col min-w-[100px]">
                 <label for="colorscheme" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Color Scheme</label>
-                <select id="colorscheme" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200">
+                <select id="colorscheme" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200 w-full">
                     <option value="bosanquet">Classic Bosanquet</option>
                     <option value="dark">Dark Mode</option>
                     <option value="synthwave" selected>Synthwave</option>
@@ -224,9 +230,9 @@
             </div>
 
             <!-- Harmony Mode Selector -->
-            <div class="flex flex-col">
+            <div class="flex flex-col min-w-[100px]">
                 <label for="harmony" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Harmony</label>
-                <select id="harmony" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200" title="Values represent step offsets based on selected EDO">
+                <select id="harmony" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200 w-full" title="Values represent step offsets based on selected EDO">
                     <option value="0">Off (Single)</option>
                     <option value="0,31">Octave (+31)</option>
                     <option value="0,18" selected>Power Chord (+18)</option>
@@ -238,9 +244,9 @@
             </div>
 
             <!-- Key Size Selector -->
-            <div class="flex flex-col">
+            <div class="flex flex-col min-w-[100px]">
                 <label for="keysize" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Key Size</label>
-                <select id="keysize" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200">
+                <select id="keysize" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200 w-full">
                     <option value="48">Small</option>
                     <option value="64" selected>Medium</option>
                     <option value="80">Large</option>
