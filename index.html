@@ -856,9 +856,13 @@
             
             if (isFluxMode) {
                 // Flux mode: Fill the screen with optimal hex count at scale(1)
-                // The keys will be fully sized and touchable, dynamically adding as many as fit.
-                const newCols = Math.ceil(wrapper.clientWidth / COL_OFFSET) + 1;
-                const newRows = Math.ceil(wrapper.clientHeight / ROW_OFFSET) + 1;
+                // Use Math.floor to ensure we only draw fully visible keys without clipping the edges
+                let newCols = Math.floor((wrapper.clientWidth - (HEX_W * 1.5)) / COL_OFFSET) + 1;
+                let newRows = Math.floor((wrapper.clientHeight - HEX_H) / ROW_OFFSET) + 1;
+                
+                // Safety clamp to ensure at least 1 key renders if the screen is tiny
+                newCols = Math.max(1, newCols);
+                newRows = Math.max(1, newRows);
                 
                 if (newCols !== NUM_COLS || newRows !== NUM_ROWS) {
                     NUM_COLS = newCols;
