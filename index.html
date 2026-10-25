@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- CRITICAL for iPad: Prevent scaling, zooming, and ensure fixed layout -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- iOS Home Screen Web App Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="IsoKeys">
+    
+    <title>IsoKeys</title>
+    
+    <!-- Tailwind CSS for rapid UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+/* ==========================================================================
+   ==========================================================================
+                                 STYLES (CSS)
+   ==========================================================================
+   ========================================================================== */
+
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+        
+        /* --------------------------------------------------------------------------
+           1. RESET & VARIABLES
+           -------------------------------------------------------------------------- */
+        body {
+            font-family: 'Space Mono', monospace;
+            background-color: #050508; /* Deep space black */
+            color: #0ff; /* Neon cyan */
+            /* Prevent scrolling and context menus on touch devices */
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            text-transform: uppercase;
+        }
+
+        input[type=range] {
+            accent-color: #0ff;
+        }
+
+        /* --------------------------------------------------------------------------
+           2. UI COMPONENTS & OVERLAYS
+           -------------------------------------------------------------------------- */
+        #start-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 5, 8, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        /* --------------------------------------------------------------------------
+           3. KEYBOARD & HEXAGON GRID
+           -------------------------------------------------------------------------- */
+        #keyboard-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            /* 80px reserved for header, dvh handles mobile browser chrome dynamically */
+            height: calc(100dvh - 80px); 
+            overflow: hidden;
+            position: relative;
+        }
+
+        #keyboard {
+            position: relative;
+            transform-origin: center center;
+            transition: transform 0.2s ease-out;
+        }
+
+        /* HEXAGON CONTAINER: Invisible bounding box for the math and positioning */
+        .hex {
+            position: absolute;
+            width: 64px;
+            height: 74px; /* W * 1.1547 for a mathematically perfect pointy-top hex */
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.1s;
+        }
+
+        /* HEXAGON INNER: Flat design, sharp edges, no gradients or shadows */
+        .hex-inner {
+            width: 94%;
+            height: 94%;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            transition: background-color 0.1s, filter 0.1s;
+        }
+
+        /* Active/Pressed State - Simple scale and brightness burst */
+        .hex.active {
+            transform: scale(0.9);
+            z-index: 10;
+        }
+        
+        .hex.active .hex-inner {
+            filter: brightness(1.8) saturate(1.5);
+        }
+
+        /* Step interval label inside the key */
+        .hex-label {
+            font-size: 14px;
+            font-weight: 700;
+            color: rgba(0,0,0,0.85);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* --------------------------------------------------------------------------
+           4. FULLSCREEN OVERRIDES
+           -------------------------------------------------------------------------- */
+        body.fullscreen-mode #top-controls {
+            display: none !important;
+        }
+        
+        body.fullscreen-mode #keyboard-wrapper {
+            height: 100dvh !important;
+        }
+        
+        #exit-fs-btn {
+            display: none; /* Hidden by default */
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 50;
+            background: #000;
+            border: 1px solid #0ff;
+            color: #0ff;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        body.fullscreen-mode #exit-fs-btn {
+            display: flex;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen w-screen">
+
+    <!-- ==========================================================================
+         ==========================================================================
+                                       MARKUP (HTML)
+         ==========================================================================
+         ========================================================================== -->
+
+    <!-- 1. AUDIO INIT OVERLAY: Web Audio API requires a user gesture to start -->
+    <section id="start-overlay" class="cursor-pointer" onclick="initEngine()">
+        <div class="text-center p-8 bg-black border border-cyan-500 mx-4 max-w-lg">
+            <h1 class="text-4xl font-bold mb-4 text-cyan-400 uppercase tracking-widest">IsoKeys</h1>
+            <p class="text-cyan-100 mb-8 max-w-md mx-auto leading-relaxed text-sm uppercase">
+                SYSTEM INITIATED: ISOMORPHIC SYNTHESIZER<br><br>
+                <strong>TOUCH INTERFACE:</strong> SLIDE ACROSS GRID TO ENGAGE MULTI-TOUCH POLYPHONY.
+            </p>
+            <button class="bg-transparent border border-cyan-400 hover:bg-cyan-900 hover:text-white text-cyan-400 font-bold py-3 px-8 transition-colors text-xl uppercase tracking-widest rounded-none">
+                Initialize
+            </button>
+        </div>
+    </section>
+
+    <!-- 2. HEADER / TOP CONTROLS -->
+    <header id="top-controls" class="h-24 sm:h-20 bg-black border-b border-cyan-900 flex flex-col sm:flex-row items-center justify-between px-2 sm:px-6 z-20 shrink-0 gap-2 sm:gap-0 pt-2 sm:pt-0">
+        <div class="font-bold text-lg sm:text-xl tracking-widest text-cyan-400 hidden lg:block uppercase">
+            IsoKeys
+        </div>
+        
+        <nav class="flex items-center gap-2 sm:gap-4 flex-wrap justify-center w-full lg:w-auto">
+            
+            <!-- EDO Tuning Selector -->
+            <div class="flex flex-col">
+                <label for="edo-tuning" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Tuning (EDO)</label>
+                <select id="edo-tuning" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200">
+                    <option value="12">12-EDO (Standard)</option>
+                    <option value="19">19-EDO</option>
+                    <option value="24">24-EDO (Quarter)</option>
+                    <option value="31" selected>31-EDO (Meantone)</option>
+                    <option value="41">41-EDO</option>
+                    <option value="53">53-EDO</option>
+                </select>
+            </div>
+
+            <!-- Tone Suite Selector -->
+            <div class="flex flex-col">
+                <label for="waveform" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Tone Suite</label>
+                <select id="waveform" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200">
+                    <option value="sine">Sine Piano</option>
+                    <option value="epiano">Electric Piano</option>
+                    <option value="fokker">Fokker Organ</option>
+                    <option value="stringpad">String Pad</option>
+                    <option value="fm">FM Synth</option>
+                    <option value="chime">Bells</option>
+                    <option value="musicbox" selected>Music Box</option>
+                    <option value="handpan">Handpan</option>
+                    <option value="synthwave">Synthwave</option>
+                    <option value="wawa">Wawa</option>
+                </select>
+            </div>
+
+            <!-- Color Scheme Selector -->
+            <div class="flex flex-col">
+                <label for="colorscheme" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Color Scheme</label>
+                <select id="colorscheme" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200">
+                    <option value="bosanquet">Classic Bosanquet</option>
+                    <option value="dark">Dark Mode</option>
+                    <option value="synthwave" selected>Synthwave</option>
+                    <option value="pastel">Pastel Dream</option>
+                    <option value="rainbow">Rainbow Spectrum</option>
+                    <option value="neon">Neon Brights</option>
+                </select>
+            </div>
+
+            <!-- Harmony Mode Selector -->
+            <div class="flex flex-col">
+                <label for="harmony" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Harmony</label>
+                <select id="harmony" class="bg-black border border-cyan-800 rounded-none px-1 sm:px-2 py-1 text-xs outline-none focus:border-cyan-400 text-cyan-200" title="Values represent step offsets based on selected EDO">
+                    <option value="0">Off (Single)</option>
+                    <option value="0,31">Octave (+31)</option>
+                    <option value="0,18" selected>Power Chord (+18)</option>
+                    <option value="0,10,18">Major Triad</option>
+                    <option value="0,8,18">Minor Triad</option>
+                    <option value="0,10,18,25">Harmonic 7th</option>
+                    <option value="0,3,15,28">Dissonant Cluster</option>
+                </select>
+            </div>
+
+            <!-- Octave Controls -->
+            <div class="flex flex-col items-center hidden sm:flex">
+                <span class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Octave (<span id="octave-label">0</span>)</span>
+                <div class="flex gap-1">
+                    <button onclick="changeOctave(-1)" class="bg-black hover:bg-cyan-900 px-2 py-1 rounded-none border border-cyan-800 active:bg-cyan-700 text-cyan-200 text-xs">-</button>
+                    <button onclick="changeOctave(1)" class="bg-black hover:bg-cyan-900 px-2 py-1 rounded-none border border-cyan-800 active:bg-cyan-700 text-cyan-200 text-xs">+</button>
+                </div>
+            </div>
+
+            <!-- Volume Slider -->
+            <div class="flex flex-col hidden md:flex">
+                <label for="volume" class="text-[9px] sm:text-[10px] text-cyan-600 mb-1 uppercase font-bold tracking-widest">Volume</label>
+                <input type="range" id="volume" min="0" max="1" step="0.01" value="0.5" class="w-16 h-4 sm:h-5" oninput="updateVolume(this.value)">
+            </div>
+            
+            <!-- Flux Mode Button -->
+            <button id="flux-btn" onclick="toggleFluxMode()" class="p-1 sm:p-2 mt-2 sm:mt-4 bg-black hover:bg-cyan-900 rounded-none border border-cyan-800 transition-colors flex items-center justify-center text-cyan-400 text-[10px] sm:text-xs font-bold uppercase tracking-widest" title="Toggle Flux Mode">
+                Flux: OFF
+            </button>
+
+            <!-- Fullscreen Button -->
+            <button onclick="toggleFullscreen()" class="p-1 sm:p-2 mt-2 sm:mt-4 bg-black hover:bg-cyan-900 rounded-none border border-cyan-800 transition-colors flex items-center justify-center text-cyan-400" title="Toggle Fullscreen">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+            </button>
+        </nav>
+    </header>
+
+    <!-- 3. MAIN KEYBOARD AREA -->
+    <main id="keyboard-wrapper">
+        <!-- Floating Close button visible ONLY in fullscreen mode -->
+        <button id="exit-fs-btn" onclick="toggleFullscreen()" class="p-3 text-cyan-400 hover:bg-cyan-900 transition-colors cursor-pointer rounded-none border border-cyan-400" title="Exit Fullscreen">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        
+        <!-- Grid injected via JS -->
+        <div id="keyboard"></div>
+    </main>
+
+    <script>
+/* ==========================================================================
+   ==========================================================================
+                              APPLICATION LOGIC (JS)
+   ==========================================================================
+   ========================================================================== */
+
+        /* --------------------------------------------------------------------------
+           1. GLOBAL STATE & CONFIGURATION
+           -------------------------------------------------------------------------- */
+        let audioCtx;
+        let masterGain;
+        let noiseBuffer; 
+        let compressor;
+        
+        // Polyphony Tracking: Maps DOM keyId to { oscs[], gains[], masterGain, waveform, nodes[] }
+        const activeOscillators = {}; 
+        
+        // Defaults (Synchronized with HTML <select> options)
+        let currentWaveform = 'musicbox';
+        let currentColor    = 'synthwave';
+        let currentHarmony  = [0, 18];
+        let currentEdo      = 31;
+        let currentOctave   = 0;
+        let masterVol       = 0.5;
+        
+        const BASE_FREQ_A4  = 440.0;
+
+        /* --------------------------------------------------------------------------
+           2. AUDIO ENGINE INITIALIZATION & UTILITIES
+           -------------------------------------------------------------------------- */
+        
+        /** Initializes the Web Audio Context safely. */
+        function initEngine() {
+            if (audioCtx) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                return;
+            }
+            
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                
+                // Add a compressor to prevent chord distortions and harsh clippings
+                compressor = audioCtx.createDynamicsCompressor();
+                compressor.threshold.setValueAtTime(-15, audioCtx.currentTime);
+                compressor.knee.setValueAtTime(10, audioCtx.currentTime);
+                compressor.ratio.setValueAtTime(6, audioCtx.currentTime);
+                compressor.attack.setValueAtTime(0.005, audioCtx.currentTime);
+                compressor.release.setValueAtTime(0.1, audioCtx.currentTime);
+                compressor.connect(audioCtx.destination);
+
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = masterVol;
+                masterGain.connect(compressor);
+                
+                // Build Noise Buffer (Used for percussive attacks in Handpan/Marimba)
+                const noiseLength = audioCtx.sampleRate * 2.0; 
+                noiseBuffer = audioCtx.createBuffer(1, noiseLength, audioCtx.sampleRate);
+                const noiseData = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < noiseLength; i++) {
+                    noiseData[i] = Math.random() * 2 - 1;
+                }
+
+                bindUIControls();
+                
+                // Hide overlay, render the board
+                document.getElementById('start-overlay').style.display = 'none';
+                renderGrid();
+                resizeKeyboard();
+            } catch (err) {
+                console.error("Audio Context Init Failed:", err);
+                alert("Could not start audio engine. Please check device settings.");
+            }
+        }
+
+        function bindUIControls() {
+            document.getElementById('waveform').addEventListener('change', e => currentWaveform = e.target.value);
+            document.getElementById('colorscheme').addEventListener('change', e => {
+                currentColor = e.target.value;
+                updateColors();
+            });
+            document.getElementById('edo-tuning').addEventListener('change', e => {
+                currentEdo = parseInt(e.target.value, 10);
+                renderGrid(); // Redraw whole grid with new math
+            });
+            document.getElementById('harmony').addEventListener('change', e => currentHarmony = e.target.value.split(',').map(Number));
+        }
+
+        function updateVolume(val) {
+            masterVol = parseFloat(val);
+            if (masterGain && audioCtx) {
+                try {
+                    masterGain.gain.setTargetAtTime(masterVol, audioCtx.currentTime, 0.05);
+                } catch(e) {
+                    console.error("Volume update error", e);
+                }
+            }
+        }
+
+        function changeOctave(delta) {
+            currentOctave += delta;
+            document.getElementById('octave-label').innerText = (currentOctave > 0 ? '+' : '') + currentOctave;
+        }
+
+        function getFreqFromStep(n) {
+            // Formula for Equal Temperament divisions using dynamic currentEdo
+            return BASE_FREQ_A4 * Math.pow(2, n / currentEdo) * Math.pow(2, currentOctave);
+        }
+
+        /* --------------------------------------------------------------------------
+           3. SYNTHESIS ENGINE (NOTE ON)
+           -------------------------------------------------------------------------- */
+        function triggerNoteOn(keyId, baseStep) {
+            if (!audioCtx || activeOscillators[keyId]) return;
+            
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const now = audioCtx.currentTime;
+                
+                const keyMasterGain = audioCtx.createGain();
+                keyMasterGain.gain.value = 1.0 / Math.max(1, Math.sqrt(currentHarmony.length));
+                keyMasterGain.connect(masterGain);
+                
+                const allOscs = [];
+                const allNodes = [];
+                const allVoiceGains = [];
+
+                currentHarmony.forEach(offset => {
+                    const step = baseStep + offset;
+                    let rawFreq = getFreqFromStep(step);
+                    const freq = Math.max(20, Math.min(rawFreq, 20000));
+                    
+                    const voiceGain = audioCtx.createGain();
+
+                    try {
+                        switch (currentWaveform) {
+                            
+                            case 'chime': {
+                                const ratios = [1, 2, 2.76, 3.5, 4.2];
+                                const levels = [1, 0.6, 0.4, 0.3, 0.15];
+                                ratios.forEach((ratio, i) => {
+                                    const osc = audioCtx.createOscillator();
+                                    const oscGain = audioCtx.createGain();
+                                    osc.type = 'sine';
+                                    osc.frequency.setValueAtTime(Math.min(freq * ratio, 20000), now);
+                                    oscGain.gain.value = levels[i] / ratios.length;
+                                    osc.connect(oscGain); oscGain.connect(voiceGain);
+                                    osc.start(now); allOscs.push(osc);
+                                });
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(1.0, now + 0.01);
+                                voiceGain.gain.exponentialRampToValueAtTime(0.001, now + 4.0);
+                                break;
+                            }
+
+                            case 'epiano': {
+                                const epBody = audioCtx.createOscillator(); epBody.type = 'triangle';
+                                const epTine = audioCtx.createOscillator(); epTine.type = 'sine';
+                                epBody.frequency.setValueAtTime(freq, now);
+                                epTine.frequency.setValueAtTime(Math.min(freq * 2, 20000), now);
+
+                                const tineGain = audioCtx.createGain();
+                                tineGain.gain.setValueAtTime(0.3, now);
+                                tineGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5); 
+                                
+                                epBody.connect(voiceGain);
+                                epTine.connect(tineGain); tineGain.connect(voiceGain);
+                                
+                                epBody.start(now); epTine.start(now);
+                                allOscs.push(epBody, epTine);
+                                
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(1.0, now + 0.01);
+                                voiceGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+                                break;
+                            }
+
+                            case 'fokker': {
+                                [1, 2, 3, 4].forEach((h, i) => {
+                                    const osc = audioCtx.createOscillator(); osc.type = 'sine';
+                                    osc.frequency.setValueAtTime(Math.min(freq * h, 20000), now);
+                                    const hGain = audioCtx.createGain(); hGain.gain.value = [1, 0.5, 0.33, 0.25][i] * 0.5;
+                                    osc.connect(hGain); hGain.connect(voiceGain);
+                                    osc.start(now); allOscs.push(osc);
+                                });
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(1.0, now + 0.05);
+                                break;
+                            }
+
+                            case 'stringpad': {
+                                const sp1 = audioCtx.createOscillator(); const sp2 = audioCtx.createOscillator();
+                                sp1.type = sp2.type = 'sawtooth';
+                                sp1.frequency.setValueAtTime(freq, now); 
+                                sp2.frequency.setValueAtTime(Math.min(freq * 1.005, 20000), now);
+
+                                const spFilter = audioCtx.createBiquadFilter();
+                                spFilter.type = 'lowpass'; 
+                                spFilter.frequency.setValueAtTime(Math.min(freq * 3, 20000), now);
+                                spFilter.frequency.linearRampToValueAtTime(Math.min(freq * 1.5, 20000), now + 1.0);
+
+                                sp1.connect(spFilter); sp2.connect(spFilter); spFilter.connect(voiceGain);
+                                sp1.start(now); sp2.start(now);
+                                allOscs.push(sp1, sp2); allNodes.push(spFilter);
+
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(0.6, now + 0.5);
+                                break;
+                            }
+
+                            case 'fm': {
+                                const fmCarrier = audioCtx.createOscillator(); const fmMod = audioCtx.createOscillator();
+                                const fmModGain = audioCtx.createGain();
+                                fmCarrier.type = fmMod.type = 'sine';
+                                
+                                fmCarrier.frequency.setValueAtTime(freq, now);
+                                fmMod.frequency.setValueAtTime(Math.min(freq * 2.01, 20000), now); 
+                                
+                                fmModGain.gain.setValueAtTime(Math.max(freq * 3, 0.001), now);
+                                fmModGain.gain.exponentialRampToValueAtTime(10, now + 1.0);
+                                
+                                fmMod.connect(fmModGain); fmModGain.connect(fmCarrier.frequency); 
+                                fmCarrier.connect(voiceGain);
+                                
+                                fmMod.start(now); fmCarrier.start(now);
+                                allOscs.push(fmCarrier, fmMod);
+
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(0.8, now + 0.05);
+                                voiceGain.gain.exponentialRampToValueAtTime(0.01, now + 3.0);
+                                break;
+                            }
+
+                            case 'wawa': {
+                                const waOsc = audioCtx.createOscillator(); waOsc.type = 'sawtooth';
+                                waOsc.frequency.setValueAtTime(freq, now);
+                                
+                                const waFilter = audioCtx.createBiquadFilter(); 
+                                waFilter.type = 'lowpass';
+                                waFilter.Q.value = 15; 
+                                
+                                waFilter.frequency.setValueAtTime(100, now);
+                                waFilter.frequency.exponentialRampToValueAtTime(Math.min(freq * 8, 20000), now + 0.1); 
+                                waFilter.frequency.exponentialRampToValueAtTime(150, now + 0.6); 
+                                
+                                waOsc.connect(waFilter); waFilter.connect(voiceGain);
+                                waOsc.start(now); allOscs.push(waOsc); allNodes.push(waFilter);
+
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(1.0, now + 0.05);
+                                break;
+                            }
+
+                            case 'synthwave': {
+                                const swOsc1 = audioCtx.createOscillator(); const swOsc2 = audioCtx.createOscillator();
+                                swOsc1.type = swOsc2.type = 'sawtooth';
+                                swOsc1.frequency.setValueAtTime(freq * 0.992, now);
+                                swOsc2.frequency.setValueAtTime(freq * 1.008, now);
+
+                                const swFilt = audioCtx.createBiquadFilter();
+                                swFilt.type = 'lowpass';
+                                swFilt.Q.value = 3;
+                                swFilt.frequency.setValueAtTime(Math.min(freq * 8, 20000), now);
+                                swFilt.frequency.exponentialRampToValueAtTime(Math.max(freq, 40), now + 0.3); 
+
+                                swOsc1.connect(swFilt); swOsc2.connect(swFilt); swFilt.connect(voiceGain);
+                                
+                                swOsc1.start(now); swOsc2.start(now);
+                                allOscs.push(swOsc1, swOsc2); allNodes.push(swFilt);
+
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(0.8, now + 0.02);
+                                voiceGain.gain.exponentialRampToValueAtTime(0.4, now + 0.3); 
+                                break;
+                            }
+
+                            case 'musicbox': {
+                                const mb1 = audioCtx.createOscillator(); const mb2 = audioCtx.createOscillator();
+                                mb1.type = 'sine'; mb2.type = 'sine';
+                                mb1.frequency.setValueAtTime(freq, now);
+                                mb2.frequency.setValueAtTime(Math.min(freq * 2.7, 20000), now);
+                                
+                                const mbGain1 = audioCtx.createGain(); mbGain1.gain.value = 0.7;
+                                const mbGain2 = audioCtx.createGain(); mbGain2.gain.value = 0.3;
+                                
+                                mb1.connect(mbGain1); mb2.connect(mbGain2);
+                                mbGain1.connect(voiceGain); mbGain2.connect(voiceGain);
+                                mb1.start(now); mb2.start(now);
+                                allOscs.push(mb1, mb2); allNodes.push(mbGain1, mbGain2);
+
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(1.0, now + 0.01);
+                                voiceGain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+                                break;
+                            }
+
+                            case 'handpan': {
+                                const hpFund = audioCtx.createOscillator(); hpFund.type = 'sine';
+                                const hpHarm1 = audioCtx.createOscillator(); hpHarm1.type = 'sine';
+                                const hpHarm2 = audioCtx.createOscillator(); hpHarm2.type = 'sine';
+                                hpFund.frequency.setValueAtTime(freq, now);
+                                hpHarm1.frequency.setValueAtTime(Math.min(freq * 2, 20000), now); 
+                                hpHarm2.frequency.setValueAtTime(Math.min(freq * 3, 20000), now); 
+
+                                const hpMix = audioCtx.createGain();
+                                const hpFilt = audioCtx.createBiquadFilter(); hpFilt.type = 'lowpass'; hpFilt.frequency.value = 2000;
+                                
+                                const hG1 = audioCtx.createGain(); hG1.gain.value = 1.0;
+                                const hG2 = audioCtx.createGain(); hG2.gain.value = 0.4;
+                                const hG3 = audioCtx.createGain(); hG3.gain.value = 0.2;
+
+                                hpFund.connect(hG1); hpHarm1.connect(hG2); hpHarm2.connect(hG3);
+                                hG1.connect(hpMix); hG2.connect(hpMix); hG3.connect(hpMix);
+                                hpMix.connect(hpFilt); hpFilt.connect(voiceGain);
+
+                                hpFund.start(now); hpHarm1.start(now); hpHarm2.start(now);
+                                allOscs.push(hpFund, hpHarm1, hpHarm2); allNodes.push(hpMix, hpFilt, hG1, hG2, hG3);
+
+                                if (noiseBuffer) {
+                                    const hpStrike = audioCtx.createBufferSource(); hpStrike.buffer = noiseBuffer;
+                                    const stFilt = audioCtx.createBiquadFilter(); stFilt.type = 'bandpass'; stFilt.frequency.value = 300; stFilt.Q.value = 2.0;
+                                    const stG = audioCtx.createGain(); stG.gain.setValueAtTime(0.8, now); stG.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                                    hpStrike.connect(stFilt); stFilt.connect(stG); stG.connect(voiceGain);
+                                    hpStrike.start(now); allOscs.push(hpStrike); allNodes.push(stFilt, stG);
+                                }
+
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(1.0, now + 0.02);
+                                voiceGain.gain.exponentialRampToValueAtTime(0.001, now + 3.0);
+                                break;
+                            }
+
+                            case 'sine':
+                            default: {
+                                const basicOsc = audioCtx.createOscillator(); basicOsc.type = 'sine';
+                                basicOsc.frequency.setValueAtTime(freq, now);
+                                basicOsc.connect(voiceGain);
+                                basicOsc.start(now); allOscs.push(basicOsc);
+                                
+                                voiceGain.gain.setValueAtTime(0.001, now);
+                                voiceGain.gain.linearRampToValueAtTime(1.0, now + 0.02);
+                                break;
+                            }
+                        }
+                    } catch (audioErr) {
+                        console.error("Audio generation error for note:", step, audioErr);
+                    }
+                    
+                    voiceGain.connect(keyMasterGain);
+                    allVoiceGains.push(voiceGain);
+                });
+                
+                activeOscillators[keyId] = { oscs: allOscs, gains: allVoiceGains, masterGain: keyMasterGain, waveform: currentWaveform, nodes: allNodes };
+                
+                const el = document.getElementById(keyId);
+                if (el) el.classList.add('active');
+            } catch (fatalErr) {
+                console.error("Fatal NoteOn Error:", fatalErr);
+            }
+        }
+
+        /* --------------------------------------------------------------------------
+           4. SYNTHESIS ENGINE (NOTE OFF)
+           -------------------------------------------------------------------------- */
+        function triggerNoteOff(keyId) {
+            if (!audioCtx) return;
+
+            try {
+                const voice = activeOscillators[keyId];
+                if (voice) {
+                    const now = audioCtx.currentTime;
+                    
+                    let releaseTime = 0.2;
+                    if (['chime', 'epiano', 'fm', 'musicbox', 'handpan'].includes(voice.waveform)) {
+                        releaseTime = 2.0; 
+                    } else if (['stringpad', 'wawa', 'synthwave'].includes(voice.waveform)) {
+                        releaseTime = 0.6; 
+                    }
+
+                    voice.gains.forEach(gainNode => {
+                        try {
+                            gainNode.gain.cancelScheduledValues(now);
+                            const safeValue = Math.max(gainNode.gain.value || 0.001, 0.001); 
+                            gainNode.gain.setValueAtTime(safeValue, now);
+                            gainNode.gain.exponentialRampToValueAtTime(0.001, now + releaseTime);
+                        } catch(e) {
+                            console.error("Envelope cleanup error", e);
+                        }
+                    });
+                    
+                    voice.oscs.forEach(osc => {
+                        try { osc.stop(now + releaseTime + 0.1); } catch (e) {}
+                    });
+                    
+                    setTimeout(() => { 
+                        try { if(voice.masterGain) voice.masterGain.disconnect(); } catch(e){}
+                    }, (releaseTime + 0.5) * 1000);
+                    
+                    delete activeOscillators[keyId];
+                }
+
+                const el = document.getElementById(keyId);
+                if (el) el.classList.remove('active');
+            } catch (err) {
+                console.error("NoteOff cleanup error", err);
+            }
+        }
+
+        /* --------------------------------------------------------------------------
+           5. GRID MATHEMATICS & RENDERING
+           -------------------------------------------------------------------------- */
+        
+        // Physical Dimensions
+        const HEX_W = 64; 
+        const HEX_H = 74; 
+        const COL_OFFSET = HEX_W;           
+        const ROW_OFFSET = HEX_H * 0.75;    
+        
+        let NUM_COLS = 15;
+        let NUM_ROWS = 10;
+        const CLASSIC_COLS = 15;
+        const CLASSIC_ROWS = 10;
+        let isFluxMode = false;
+        
+        const keyboardEl = document.getElementById('keyboard');
+
+        function getPitchClassColor(pitchClass) {
+            switch (currentColor) {
+                case 'bosanquet': {
+                    if (currentEdo === 31) {
+                        const diatonic = [0, 5, 10, 13, 18, 23, 28];
+                        const acc = [3, 8, 15, 20, 25]; 
+                        const red = [1, 6, 11, 14, 19, 24, 29];
+                        const blue = [2, 7, 12, 17, 22, 27, 4];
+                        if (diatonic.includes(pitchClass)) return '#f8fafc'; // White
+                        if (acc.includes(pitchClass)) return '#1e293b';      // Black
+                        if (red.includes(pitchClass)) return '#ef4444';      // Red
+                        if (blue.includes(pitchClass)) return '#3b82f6';     // Blue
+                        return '#22c55e'; // Green (Microtones)
+                    } else if (currentEdo === 12) {
+                        // Standard Piano layout mapping for 12 EDO
+                        const whiteKeys = [0, 2, 4, 5, 7, 9, 11];
+                        return whiteKeys.includes(pitchClass) ? '#f8fafc' : '#1e293b';
+                    } else {
+                        // Generalized alternating fallback for other EDOs on Bosanquet theme
+                        return pitchClass % 2 === 0 ? '#f8fafc' : '#1e293b'; 
+                    }
+                }
+                case 'dark':
+                    return `hsl(210, 15%, ${15 + (pitchClass % 3) * 5}%)`; 
+                case 'synthwave':
+                    return `hsl(${180 + (pitchClass * (120 / currentEdo)) % 120}, 100%, 45%)`; 
+                case 'rainbow':
+                    return `hsl(${(pitchClass * (360 / currentEdo)) % 360}, 100%, 55%)`; 
+                case 'neon':
+                    return `hsl(${(pitchClass * 137.5) % 360}, 100%, 60%)`; 
+                default: // pastel
+                    return `hsl(${(pitchClass * (360 / currentEdo)) % 360}, 70%, 80%)`; 
+            }
+        }
+
+        function updateColors() {
+            document.querySelectorAll('.hex').forEach(hex => {
+                const pitchClass = parseInt(hex.dataset.pitchclass, 10);
+                const inner = hex.querySelector('.hex-inner');
+                const bgColor = getPitchClassColor(pitchClass);
+                inner.style.backgroundColor = bgColor;
+                
+                const label = inner.querySelector('.hex-label');
+                if (['#f8fafc', 'pastel', 'rainbow', 'neon'].includes(bgColor) || ['pastel', 'rainbow', 'neon'].includes(currentColor)) {
+                    label.style.color = '#000'; 
+                } else {
+                    label.style.color = '#fff';
+                }
+            });
+        }
+
+        function renderGrid() {
+            keyboardEl.innerHTML = ''; // Wipe existing board
+            
+            keyboardEl.style.width = `${(NUM_COLS - 0.5) * COL_OFFSET + HEX_W/2}px`;
+            keyboardEl.style.height = `${(NUM_ROWS - 1) * ROW_OFFSET + HEX_H}px`;
+            
+            const CENTER_COL = Math.floor(NUM_COLS / 2); 
+            const CENTER_ROW = Math.floor(NUM_ROWS / 2); 
+            const CENTER_MATH = CENTER_COL * 5 + Math.floor(CENTER_ROW / 2) * 1 + (CENTER_ROW % 2) * 3;
+
+            for (let row = 0; row < NUM_ROWS; row++) {
+                for (let col = 0; col < NUM_COLS; col++) {
+                    
+                    // Isomorphic Translation: Col +5, Diag Up/Right +3, Diag Up/Left -2
+                    const n_raw = col * 5 + Math.floor(row / 2) * 1 + (row % 2) * 3;
+                    const n = n_raw - CENTER_MATH;
+                    const pitchClass = ((n % currentEdo) + currentEdo) % currentEdo; // Dynamic Modulo based on EDO
+                    
+                    const visualRow = NUM_ROWS - 1 - row; 
+                    const x = col * COL_OFFSET + (row % 2 === 1 ? HEX_W / 2 : 0);
+                    const y = visualRow * ROW_OFFSET;
+                    
+                    const hexWrapper = document.createElement('div');
+                    hexWrapper.className = 'hex';
+                    hexWrapper.id = `key_${col}_${row}`;
+                    hexWrapper.dataset.n = n;
+                    hexWrapper.dataset.pitchclass = pitchClass;
+                    hexWrapper.style.left = `${x}px`;
+                    hexWrapper.style.top = `${y}px`;
+
+                    const hexInner = document.createElement('div');
+                    hexInner.className = 'hex-inner';
+                    
+                    const label = document.createElement('span');
+                    label.className = 'hex-label';
+                    label.innerText = n; 
+                    
+                    hexInner.appendChild(label);
+                    hexWrapper.appendChild(hexInner);
+                    keyboardEl.appendChild(hexWrapper);
+                }
+            }
+            updateColors();
+        }
+
+        /* --------------------------------------------------------------------------
+           6. EVENT LISTENERS & RESIZING (FULLSCREEN / MULTI-TOUCH)
+           -------------------------------------------------------------------------- */
+        
+        function toggleFluxMode() {
+            isFluxMode = !isFluxMode;
+            const btn = document.getElementById('flux-btn');
+            if (btn) btn.innerText = `FLUX: ${isFluxMode ? 'ON' : 'OFF'}`;
+            
+            if (!isFluxMode) {
+                // Restore classic aspect ratio dimensions
+                NUM_COLS = CLASSIC_COLS;
+                NUM_ROWS = CLASSIC_ROWS;
+                renderGrid();
+            }
+            resizeKeyboard(); // Recalculates sizes and re-renders if necessary
+        }
+
+        function resizeKeyboard() {
+            const wrapper = document.getElementById('keyboard-wrapper');
+            const board = document.getElementById('keyboard');
+            if (!wrapper || !board) return;
+            
+            if (isFluxMode) {
+                // Flux mode: Fill the screen with optimal hex count at scale(1)
+                // The keys will be fully sized and touchable, dynamically adding as many as fit.
+                const newCols = Math.ceil(wrapper.clientWidth / COL_OFFSET) + 1;
+                const newRows = Math.ceil(wrapper.clientHeight / ROW_OFFSET) + 1;
+                
+                if (newCols !== NUM_COLS || newRows !== NUM_ROWS) {
+                    NUM_COLS = newCols;
+                    NUM_ROWS = newRows;
+                    renderGrid(); // Redraw with new key count
+                }
+                
+                board.style.transform = `scale(1)`;
+            } else {
+                // Classic mode: Maintain 15x10 aspect ratio and scale to fit window
+                const baseW = (NUM_COLS - 0.5) * COL_OFFSET + HEX_W / 2;
+                const baseH = (NUM_ROWS - 1) * ROW_OFFSET + HEX_H;
+                
+                const scale = Math.min(
+                    (wrapper.clientWidth - 10) / baseW,
+                    (wrapper.clientHeight - 10) / baseH
+                );
+                
+                board.style.transform = `scale(${scale})`;
+            }
+        }
+        window.addEventListener('resize', resizeKeyboard);
+
+        function toggleFullscreen() {
+            try {
+                const docElm = document.documentElement;
+                const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+                
+                if (!isFullscreen && !document.body.classList.contains('fullscreen-mode')) {
+                    if (docElm.requestFullscreen) docElm.requestFullscreen().catch(() => {});
+                    else if (docElm.webkitRequestFullscreen) docElm.webkitRequestFullscreen(); 
+                    document.body.classList.add('fullscreen-mode');
+                } else {
+                    if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen();
+                    document.body.classList.remove('fullscreen-mode');
+                }
+                setTimeout(resizeKeyboard, 100);
+            } catch (e) {
+                console.error("Fullscreen toggle error", e);
+            }
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                document.body.classList.remove('fullscreen-mode');
+                setTimeout(resizeKeyboard, 100);
+            }
+        });
+
+        // Pointer/Touch State tracking
+        const activePointers = new Map(); 
+        const keyPressCounts = new Map(); 
+
+        function updatePointer(pointerId, newKeyId) {
+            try {
+                const oldKeyId = activePointers.get(pointerId);
+                if (oldKeyId === newKeyId) return;
+
+                if (oldKeyId) {
+                    let count = Math.max(0, (keyPressCounts.get(oldKeyId) || 0) - 1);
+                    keyPressCounts.set(oldKeyId, count);
+                    if (count === 0) triggerNoteOff(oldKeyId);
+                }
+
+                if (newKeyId) {
+                    activePointers.set(pointerId, newKeyId);
+                    let count = (keyPressCounts.get(newKeyId) || 0) + 1;
+                    keyPressCounts.set(newKeyId, count);
+                    if (count === 1) {
+                        const el = document.getElementById(newKeyId);
+                        if (el && el.dataset && el.dataset.n) {
+                            triggerNoteOn(newKeyId, parseInt(el.dataset.n, 10));
+                        }
+                    }
+                } else {
+                    activePointers.delete(pointerId);
+                }
+            } catch (err) {
+                console.error("Pointer update error:", err);
+            }
+        }
+
+        function getKeyIdFromPoint(x, y) {
+            try {
+                const el = document.elementFromPoint(x, y);
+                if (!el || el.nodeType !== 1) return null;
+                const hex = el.closest('.hex');
+                return hex ? hex.id : null;
+            } catch(e) {
+                return null;
+            }
+        }
+
+        document.addEventListener('touchstart', (e) => {
+            try {
+                if (e.target && e.target.nodeType === 1 && typeof e.target.closest === 'function') {
+                    if (e.target.closest('#exit-fs-btn')) return; 
+                    if (e.target.closest('#keyboard-wrapper')) e.preventDefault(); 
+                }
+                for (let t of e.changedTouches) updatePointer(t.identifier, getKeyIdFromPoint(t.clientX, t.clientY));
+            } catch (err) {}
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            try {
+                if (e.target && e.target.nodeType === 1 && typeof e.target.closest === 'function') {
+                    if (e.target.closest('#exit-fs-btn')) return; 
+                    if (e.target.closest('#keyboard-wrapper')) e.preventDefault();
+                }
+                for (let t of e.changedTouches) updatePointer(t.identifier, getKeyIdFromPoint(t.clientX, t.clientY));
+            } catch (err) {}
+        }, { passive: false });
+
+        document.addEventListener('touchend', (e) => {
+            try {
+                for (let t of e.changedTouches) updatePointer(t.identifier, null);
+            } catch (err) {}
+        }, { passive: false });
+
+        document.addEventListener('touchcancel', (e) => {
+            try {
+                for (let t of e.changedTouches) updatePointer(t.identifier, null);
+            } catch (err) {}
+        }, { passive: false });
+
+        let isMouseDown = false;
+        document.addEventListener('mousedown', (e) => {
+            try {
+                if (e.target && e.target.nodeType === 1 && typeof e.target.closest === 'function') {
+                    if (e.target.closest('#top-controls') || e.target.closest('#exit-fs-btn')) return; 
+                }
+                isMouseDown = true;
+                updatePointer('mouse', getKeyIdFromPoint(e.clientX, e.clientY));
+            } catch(err) {}
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isMouseDown) return;
+            updatePointer('mouse', getKeyIdFromPoint(e.clientX, e.clientY));
+        });
+
+        document.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            updatePointer('mouse', null);
+        });
+        
+        document.getElementById('keyboard-wrapper').addEventListener('contextmenu', e => e.preventDefault());
+
+    </script>
+</body>
+</html>
