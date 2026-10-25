@@ -1,2 +1,2 @@
 # isokeys
-A music toy
+A music toy generated with Gemini
