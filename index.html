@@ -756,7 +756,8 @@
         function renderGrid() {
             keyboardEl.innerHTML = ''; // Wipe existing board
             
-            keyboardEl.style.width = `${(NUM_COLS - 0.5) * COL_OFFSET + HEX_W/2}px`;
+            // Fix: Calculate exact bounding box width to prevent right-side cutoffs
+            keyboardEl.style.width = `${(NUM_COLS - 1) * COL_OFFSET + HEX_W * 1.5}px`;
             keyboardEl.style.height = `${(NUM_ROWS - 1) * ROW_OFFSET + HEX_H}px`;
             
             const CENTER_COL = Math.floor(NUM_COLS / 2); 
@@ -835,8 +836,9 @@
                 
                 board.style.transform = `scale(1)`;
             } else {
-                // Classic mode: Maintain 15x10 aspect ratio and scale to fit window
-                const baseW = (NUM_COLS - 0.5) * COL_OFFSET + HEX_W / 2;
+                // Classic mode: Maintain aspect ratio and scale to fit window
+                // Fix: Correct bounding box width to prevent right edge from clipping
+                const baseW = (NUM_COLS - 1) * COL_OFFSET + HEX_W * 1.5;
                 const baseH = (NUM_ROWS - 1) * ROW_OFFSET + HEX_H;
                 
                 const scale = Math.min(
