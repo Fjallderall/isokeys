@@ -379,6 +379,14 @@
                 HEX_H = Math.round(HEX_W * 1.1547); // Mathematically perfect pointy-top hex
                 COL_OFFSET = HEX_W;
                 ROW_OFFSET = HEX_H * 0.75;
+                
+                // Auto-enable Flux Mode so the physical size change is actually visible!
+                if (!isFluxMode) {
+                    isFluxMode = true;
+                    const btn = document.getElementById('flux-btn');
+                    if (btn) btn.innerText = 'FLUX: ON';
+                }
+                
                 renderGrid();
                 resizeKeyboard();
             });
@@ -812,6 +820,8 @@
                     const label = document.createElement('span');
                     label.className = 'hex-label';
                     label.innerText = n; 
+                    // Dynamically scale the text size based on the key width
+                    label.style.fontSize = `${Math.max(10, Math.round(HEX_W / 4.2))}px`;
                     
                     hexInner.appendChild(label);
                     hexWrapper.appendChild(hexInner);
